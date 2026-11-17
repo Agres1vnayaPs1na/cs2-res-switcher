@@ -96,6 +96,47 @@ fn all_modes(display: &PrimaryDisplay) -> Vec<DEVMODEW> {
     modes
 }
 
+/// One resolution the primary monitor supports, with its refresh rates.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Resolution {
+    pub width: u32,
+    pub height: u32,
+    /// Supported refresh rates, highest first.
+    pub rates: Vec<u32>,
+}
+
+/// Resolutions (>= 800x600, 32 bpp) the primary monitor supports, largest first.
+pub fn supported_resolutions() -> Result<Vec<Resolution>, String> {
+    let display = find_primary()?;
+    let mut list: Vec<Resolution> = Vec::new();
+    for m in all_modes(&display) {
+        if m.dmBitsPerPel != 32 || m.dmPelsWidth < 800 || m.dmPelsHeight < 600 {
+            continue;
+        }
+        let hz = m.dmDisplayFrequency;
+        match list
+            .iter_mut()
+            .find(|r| r.width == m.dmPelsWidth && r.height == m.dmPelsHeight)
+        {
+            Some(r) => {
+                if !r.rates.contains(&hz) {
+                    r.rates.push(hz);
+                }
+            }
+            None => list.push(Resolution {
+                width: m.dmPelsWidth,
+                height: m.dmPelsHeight,
+                rates: vec![hz],
+            }),
+        }
+    }
+    for r in &mut list {
+        r.rates.sort_unstable_by_key(|&hz| std::cmp::Reverse(hz));
+    }
+    list.sort_by_key(|r| std::cmp::Reverse((r.width, r.height)));
+    Ok(list)
+}
+
 fn describe(dm: &DEVMODEW) -> String {
     format!(
         "{}x{} @ {} Hz, {} bpp",

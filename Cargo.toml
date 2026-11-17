@@ -1,6 +1,6 @@
 [package]
 name = "cs2-res-switcher"
-version = "1.1.0"
+version = "1.2.0"
 edition = "2021"
 description = "Auto-switch primary monitor resolution while CS2 (or any game) is running"
 license = "MIT"

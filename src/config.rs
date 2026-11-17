@@ -35,6 +35,8 @@ pub struct Config {
     pub scaling: Scaling,
     /// UI language: "auto" (Windows language), "uk" or "en".
     pub language: Language,
+    /// Set after the first-run hint has been shown.
+    pub welcome_shown: bool,
 }
 
 impl Default for Config {
@@ -47,6 +49,7 @@ impl Default for Config {
             poll_interval_ms: 1000,
             scaling: Scaling::Stretch,
             language: Language::Auto,
+            welcome_shown: false,
         }
     }
 }

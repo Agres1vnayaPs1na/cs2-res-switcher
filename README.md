@@ -13,8 +13,11 @@ A lightweight Windows tray utility. When **CS2** (`cs2.exe`) starts, it switches
 3. Pick the setup language. The app will use the same language (Ukrainian or English).
 4. Optionally tick **Start with Windows**.
 5. Done: a small monitor icon appears in the tray next to the clock.
+6. **Choose your game mode:** right-click the icon → **Resolution** and **Refresh rate**. The lists show only the modes your monitor actually supports, so there is nothing to type and nothing can be set wrong. By default it uses 1280×960 at the highest refresh rate your monitor supports.
 
-To uninstall: **Settings → Apps → cs2-res-switcher → Uninstall**.
+## Uninstalling
+
+The app has a regular uninstaller: **Settings → Apps → Installed apps → cs2-res-switcher → Uninstall** (or Start → cs2-res-switcher → Uninstall). It removes the program, its shortcuts, `config.toml` and the log.
 
 ## Usage
 
@@ -29,12 +32,14 @@ Right-click the icon to open the menu:
 - **Status**: shows what the app is doing right now.
 - **Pause / Resume**: temporarily stops automatic switching.
 - **Switch manually**: switches without the game, handy for a quick test. Click again to restore the desktop.
+- **Resolution**: pick the game resolution from the modes your monitor supports (for example 1280×960, 1440×1080 or 1920×1080).
+- **Refresh rate**: **Highest** (default) or an exact value such as 144, 240 or 360 Hz. Only rates supported at the chosen resolution are listed.
 - **Мова / Language**: choose **Українська** or **English**. The choice is saved.
 - **Exit**: always restores your desktop resolution before closing.
 
 ## Settings (`config.toml`)
 
-The file is created on first run next to the program. To open it, use **Start → cs2-res-switcher → config.toml**. After editing it, exit the app from the tray and start it again.
+Normally you don't need to touch this file: resolution, refresh rate and language are set from the tray menu and saved here automatically. The file is created on first run next to the program. To open it, use **Start → cs2-res-switcher → config.toml**. After editing it, exit the app from the tray and start it again.
 
 ```toml
 process_name = "cs2.exe"   # game to watch

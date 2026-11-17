@@ -68,6 +68,11 @@ pub enum Msg {
     ManualRestore,
     Quit,
     AlreadyRunning,
+    Resolution,
+    RefreshRate,
+    MaxRate,
+    Hz,
+    Welcome,
 }
 
 pub fn tr(lang: Lang, msg: Msg) -> &'static str {
@@ -89,6 +94,28 @@ pub fn tr(lang: Lang, msg: Msg) -> &'static str {
         (Lang::En, AlreadyRunning) => {
             "cs2-res-switcher is already running (see the tray icon)."
         }
+        (Lang::Uk, Resolution) => "Роздільність",
+        (Lang::En, Resolution) => "Resolution",
+        (Lang::Uk, RefreshRate) => "Частота",
+        (Lang::En, RefreshRate) => "Refresh rate",
+        (Lang::Uk, MaxRate) => "Максимальна",
+        (Lang::En, MaxRate) => "Highest",
+        (Lang::Uk, Hz) => "Гц",
+        (Lang::En, Hz) => "Hz",
+        (Lang::Uk, Welcome) => concat!(
+            "cs2-res-switcher працює у треї: іконка монітора біля годинника ",
+            "(якщо її не видно, натисніть стрілку ^).\n\n",
+            "Правий клік по іконці → «Роздільність» і «Частота», щоб вибрати режим для гри. ",
+            "У списку лише ті режими, які підтримує ваш монітор.\n\n",
+            "Коли запуститься CS2, монітор перемкнеться сам, а після гри все повернеться назад."
+        ),
+        (Lang::En, Welcome) => concat!(
+            "cs2-res-switcher is running in the tray: the monitor icon next to the clock ",
+            "(if you can't see it, click the ^ arrow).\n\n",
+            "Right-click the icon → \"Resolution\" and \"Refresh rate\" to choose the game mode. ",
+            "Only modes your monitor supports are listed.\n\n",
+            "When CS2 starts the monitor switches automatically and goes back after the game."
+        ),
     }
 }
 

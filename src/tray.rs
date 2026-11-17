@@ -1,5 +1,6 @@
 //! System tray icon and context menu.
 
+use crate::display::Resolution;
 use crate::i18n::{tr, Lang, Msg};
 use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
@@ -16,6 +17,9 @@ pub enum Action {
     TogglePause,
     ManualSwitch,
     SetLanguage(Lang),
+    SetResolution(u32, u32),
+    /// 0 = highest available.
+    SetRefreshRate(u32),
     Quit,
 }
 
@@ -29,10 +33,30 @@ pub struct Tray {
     lang_en: CheckMenuItem,
     quit: MenuItem,
     state: Option<IconState>,
+    resolutions: Vec<Resolution>,
+    res_menu: Submenu,
+    res_items: Vec<(CheckMenuItem, u32, u32)>,
+    rate_menu: Submenu,
+    rate_items: Vec<(CheckMenuItem, u32)>,
+    selection: (u32, u32, u32),
+}
+
+fn aspect(w: u32, h: u32) -> &'static str {
+    match (w * 3 == h * 4, w * 9 == h * 16, w * 10 == h * 16, w * 4 == h * 5) {
+        (true, ..) => " (4:3)",
+        (_, true, ..) => " (16:9)",
+        (_, _, true, _) => " (16:10)",
+        (.., true) => " (5:4)",
+        _ => "",
+    }
 }
 
 impl Tray {
-    pub fn new(lang: Lang) -> Result<Self, String> {
+    pub fn new(
+        lang: Lang,
+        resolutions: Vec<Resolution>,
+        selection: (u32, u32, u32),
+    ) -> Result<Self, String> {
         let status = MenuItem::new("", false, None);
         let pause = MenuItem::new(tr(lang, Msg::Pause), true, None);
         let manual = MenuItem::new(tr(lang, Msg::ManualSwitch), true, None);
@@ -46,12 +70,31 @@ impl Tray {
             .append_items(&[&lang_uk, &lang_en])
             .map_err(|e| format!("tray menu: {e}"))?;
 
+        let res_menu = Submenu::new("", !resolutions.is_empty());
+        let mut res_items = Vec::new();
+        for r in &resolutions {
+            let item = CheckMenuItem::new(
+                format!("{}×{}{}", r.width, r.height, aspect(r.width, r.height)),
+                true,
+                false,
+                None,
+            );
+            res_menu
+                .append(&item)
+                .map_err(|e| format!("tray menu: {e}"))?;
+            res_items.push((item, r.width, r.height));
+        }
+        let rate_menu = Submenu::new("", true);
+
         let menu = Menu::new();
         menu.append_items(&[
             &status,
             &PredefinedMenuItem::separator(),
             &pause,
             &manual,
+            &PredefinedMenuItem::separator(),
+            &res_menu,
+            &rate_menu,
             &lang_menu,
             &PredefinedMenuItem::separator(),
             &quit,
@@ -65,7 +108,7 @@ impl Tray {
             .build()
             .map_err(|e| format!("tray icon: {e}"))?;
 
-        Ok(Self {
+        let mut tray = Self {
             icon,
             lang,
             status,
@@ -75,7 +118,58 @@ impl Tray {
             lang_en,
             quit,
             state: Some(IconState::Idle),
-        })
+            resolutions,
+            res_menu,
+            res_items,
+            rate_menu,
+            rate_items: Vec::new(),
+            selection,
+        };
+        tray.set_selection(selection.0, selection.1, selection.2);
+        Ok(tray)
+    }
+
+    /// Mark the chosen resolution / refresh rate and rebuild the rate list
+    /// for that resolution.
+    pub fn set_selection(&mut self, width: u32, height: u32, rate: u32) {
+        let lang = self.lang;
+        self.selection = (width, height, rate);
+        for (item, w, h) in &self.res_items {
+            item.set_checked(*w == width && *h == height);
+        }
+
+        for (item, _) in self.rate_items.drain(..) {
+            let _ = self.rate_menu.remove(&item);
+        }
+        let rates = self
+            .resolutions
+            .iter()
+            .find(|r| r.width == width && r.height == height)
+            .map(|r| r.rates.clone())
+            .unwrap_or_default();
+        let max = CheckMenuItem::new(tr(lang, Msg::MaxRate), true, rate == 0, None);
+        let _ = self.rate_menu.append(&max);
+        self.rate_items.push((max, 0));
+        for hz in rates {
+            let item = CheckMenuItem::new(
+                format!("{hz} {}", tr(lang, Msg::Hz)),
+                true,
+                hz == rate,
+                None,
+            );
+            let _ = self.rate_menu.append(&item);
+            self.rate_items.push((item, hz));
+        }
+
+        self.res_menu
+            .set_text(format!("{}: {width}×{height}", tr(lang, Msg::Resolution)));
+        let rate_label = if rate == 0 {
+            tr(lang, Msg::MaxRate).to_lowercase()
+        } else {
+            format!("{rate} {}", tr(lang, Msg::Hz))
+        };
+        self.rate_menu
+            .set_text(format!("{}: {rate_label}", tr(lang, Msg::RefreshRate)));
     }
 
     pub fn set_language(&mut self, lang: Lang) {
@@ -83,6 +177,8 @@ impl Tray {
         self.quit.set_text(tr(lang, Msg::Quit));
         self.lang_uk.set_checked(lang == Lang::Uk);
         self.lang_en.set_checked(lang == Lang::En);
+        let (w, h, r) = self.selection;
+        self.set_selection(w, h, r);
     }
 
     /// Update status text, tooltip, menu labels and icon colour.
@@ -126,6 +222,12 @@ impl Tray {
             }
             if id == self.lang_en.id() {
                 return Some(Action::SetLanguage(Lang::En));
+            }
+            if let Some((_, w, h)) = self.res_items.iter().find(|(i, ..)| i.id() == id) {
+                return Some(Action::SetResolution(*w, *h));
+            }
+            if let Some((_, hz)) = self.rate_items.iter().find(|(i, _)| i.id() == id) {
+                return Some(Action::SetRefreshRate(*hz));
             }
             if id == self.quit.id() {
                 return Some(Action::Quit);

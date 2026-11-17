@@ -10,7 +10,7 @@ mod logger;
 mod tray;
 
 use config::Config;
-use display::Switcher;
+use display::{Resolution, Switcher};
 use i18n::{Lang, Language, Msg, Status};
 use std::ffi::OsString;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -55,6 +55,7 @@ struct App {
     mode: Mode,
     paused: bool,
     lang: Lang,
+    resolutions: Vec<Resolution>,
 }
 
 impl App {
@@ -155,6 +156,23 @@ impl App {
                 self.tray.set_language(lang);
                 self.refresh_tray();
             }
+            Action::SetResolution(width, height) => {
+                let rate_ok = self
+                    .resolutions
+                    .iter()
+                    .find(|r| r.width == width && r.height == height)
+                    .is_some_and(|r| r.rates.contains(&self.cfg.refresh_rate));
+                self.cfg.width = width;
+                self.cfg.height = height;
+                if !rate_ok {
+                    self.cfg.refresh_rate = 0;
+                }
+                self.apply_new_mode();
+            }
+            Action::SetRefreshRate(hz) => {
+                self.cfg.refresh_rate = hz;
+                self.apply_new_mode();
+            }
             Action::Quit => {
                 log_info!("Exit requested");
                 self.restore();
@@ -162,6 +180,29 @@ impl App {
             }
         }
         true
+    }
+
+    /// Save a changed resolution / refresh rate and, if the game mode is
+    /// active right now, re-apply it immediately.
+    fn apply_new_mode(&mut self) {
+        let (w, h, hz) = (self.cfg.width, self.cfg.height, self.cfg.refresh_rate);
+        log_info!("Game mode set to {w}x{h} @ {hz} Hz (0 = highest)");
+        if let Err(e) = config::save(&self.cfg) {
+            log_error!("Could not save config: {e}");
+        }
+        self.tray.set_selection(w, h, hz);
+        if self.switcher.is_switched() {
+            self.restore();
+            if !self.switch_to_game() {
+                self.set_mode(if self.mode == Mode::Auto {
+                    Mode::Suppressed
+                } else {
+                    Mode::Idle
+                });
+                return;
+            }
+        }
+        self.refresh_tray();
     }
 
     fn set_mode(&mut self, mode: Mode) {
@@ -268,7 +309,24 @@ fn main() {
         log_info!("{w}");
     }
 
-    let tray = match Tray::new(lang) {
+    let resolutions = display::supported_resolutions().unwrap_or_else(|e| {
+        log_error!("Cannot list display modes: {e}");
+        Vec::new()
+    });
+    log_info!(
+        "Primary monitor modes: {}",
+        resolutions
+            .iter()
+            .map(|r| format!("{}x{} {:?}", r.width, r.height, r.rates))
+            .collect::<Vec<_>>()
+            .join("; ")
+    );
+
+    let tray = match Tray::new(
+        lang,
+        resolutions.clone(),
+        (cfg.width, cfg.height, cfg.refresh_rate),
+    ) {
         Ok(t) => t,
         Err(e) => {
             log_error!("Cannot create tray icon: {e}");
@@ -300,7 +358,24 @@ fn main() {
         mode: Mode::Idle,
         paused: false,
         lang,
+        resolutions,
     };
+    if !app.cfg.welcome_shown {
+        app.cfg.welcome_shown = true;
+        if let Err(e) = config::save(&app.cfg) {
+            log_error!("Could not save config: {e}");
+        }
+        // SAFETY: modal message box with valid wide strings.
+        unsafe {
+            MessageBoxW(
+                None,
+                &HSTRING::from(i18n::tr(lang, Msg::Welcome)),
+                w!("cs2-res-switcher"),
+                MB_OK | MB_ICONINFORMATION,
+            );
+        }
+    }
+
     app.tick();
     let mut last_poll = Instant::now();
 
