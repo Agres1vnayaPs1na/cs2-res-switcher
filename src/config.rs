@@ -1,5 +1,6 @@
 //! Loading and creating `config.toml` next to the executable.
 
+use crate::i18n::Language;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -32,6 +33,8 @@ pub struct Config {
     /// "stretch" | "center" | "driver". Asks the GPU driver to scale the
     /// game mode itself, which can avoid a full monitor re-sync.
     pub scaling: Scaling,
+    /// UI language: "auto" (Windows language), "uk" or "en".
+    pub language: Language,
 }
 
 impl Default for Config {
@@ -43,6 +46,7 @@ impl Default for Config {
             refresh_rate: 0,
             poll_interval_ms: 1000,
             scaling: Scaling::Stretch,
+            language: Language::Auto,
         }
     }
 }
@@ -55,6 +59,7 @@ const HEADER: &str = "\
 # poll_interval_ms - how often to check for the process (ms, min 100)
 # scaling          - \"stretch\" (4:3 stretched), \"center\" (black bars) or \"driver\" (don't touch)
 #                    For the fastest switch also set NVIDIA \"Perform scaling on: GPU\".
+# language         - \"auto\" (Windows language), \"uk\" (Ukrainian) or \"en\" (English)
 
 ";
 
@@ -77,7 +82,7 @@ pub fn load() -> (Config, Option<String>) {
 
     if !path.exists() {
         let cfg = Config::default();
-        let warning = match write_default(&path, &cfg) {
+        let warning = match save(&cfg) {
             Ok(()) => Some(format!("Created default config at {}", path.display())),
             Err(e) => Some(format!("Could not create {}: {e}", path.display())),
         };
@@ -99,9 +104,10 @@ pub fn load() -> (Config, Option<String>) {
     }
 }
 
-fn write_default(path: &Path, cfg: &Config) -> std::io::Result<()> {
+/// Writes the config (with the explanatory header) next to the executable.
+pub fn save(cfg: &Config) -> std::io::Result<()> {
     let body = toml::to_string_pretty(cfg).map_err(std::io::Error::other)?;
-    fs::write(path, format!("{HEADER}{body}"))
+    fs::write(config_path(), format!("{HEADER}{body}"))
 }
 
 impl Config {

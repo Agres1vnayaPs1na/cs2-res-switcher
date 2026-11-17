@@ -1,60 +1,70 @@
 # cs2-res-switcher
 
-Легка фонова утиліта для Windows: коли запускається **CS2** (`cs2.exe`), вона перемикає **тільки основний монітор** на ігрову роздільність (за замовчуванням 1280×960), а коли гра закривається — повертає робочий стіл назад. Другий монітор не чіпається.
+**English** | [Українська](README.uk.md)
 
-*Lightweight Windows tray tool: switches only the primary monitor to a game resolution while CS2 runs and restores your desktop mode afterwards.*
+A lightweight Windows tray utility. When **CS2** (`cs2.exe`) starts, it switches **only your primary monitor** to a game resolution (1280×960 by default). When the game closes, it puts your desktop back exactly as it was. A second monitor is never touched.
 
-## Встановлення
+## Installation
 
-1. Відкрийте сторінку **[Releases](../../releases/latest)** і скачайте `cs2-res-switcher-setup-X.Y.Z.exe`.
-2. Запустіть інсталятор. Права адміністратора не потрібні.
-   - Windows може показати синє вікно SmartScreen («Windows захистила ваш комп'ютер»), бо програма не має платного цифрового підпису. Натисніть **«Докладніше» → «Виконати все одно»**.
-3. За бажанням поставте галочку «Запускати разом з Windows».
-4. Готово: у треї біля годинника з'явиться іконка монітора.
+1. Open **[Releases](../../releases/latest)** and download `cs2-res-switcher-setup-X.Y.Z.exe`.
+2. Run it. No administrator rights are needed.
+   - **If the browser blocks the download** (Edge: "isn't commonly downloaded"), press `Ctrl+J`, then **"…" → Keep → Show more → Keep anyway**.
+   - **If Windows shows a blue SmartScreen window** ("Windows protected your PC"), click **More info → Run anyway**. This happens because the app is new and has no paid code-signing certificate.
+3. Pick the setup language. The app will use the same language (Ukrainian or English).
+4. Optionally tick **Start with Windows**.
+5. Done: a small monitor icon appears in the tray next to the clock.
 
-Видалення: «Параметри → Програми → cs2-res-switcher → Видалити».
+To uninstall: **Settings → Apps → cs2-res-switcher → Uninstall**.
 
-## Як користуватися
+## Usage
 
-| Колір іконки в треї | Що означає |
+| Tray icon colour | Meaning |
 |---|---|
-| сірий | чекає на запуск гри |
-| зелений | ігровий режим увімкнено |
-| жовтий | пауза |
+| grey | waiting for the game |
+| green | game resolution is active |
+| yellow | paused |
 
-Правий клік по іконці: статус, **Пауза / Відновити**, **Перемкнути вручну** (щоб перевірити режим без гри), **Вихід** (завжди повертає роздільність робочого столу).
+Right-click the icon to open the menu:
 
-## Налаштування (`config.toml`)
+- **Status**: shows what the app is doing right now.
+- **Pause / Resume**: temporarily stops automatic switching.
+- **Switch manually**: switches without the game, handy for a quick test. Click again to restore the desktop.
+- **Мова / Language**: choose **Українська** or **English**. The choice is saved.
+- **Exit**: always restores your desktop resolution before closing.
 
-Файл створюється при першому запуску поруч із програмою (Пуск → cs2-res-switcher → config.toml). Після змін вийдіть через трей і запустіть програму знову.
+## Settings (`config.toml`)
+
+The file is created on first run next to the program. To open it, use **Start → cs2-res-switcher → config.toml**. After editing it, exit the app from the tray and start it again.
 
 ```toml
-process_name = "cs2.exe"   # яку гру відстежувати
+process_name = "cs2.exe"   # game to watch
 width = 1280
 height = 960
-refresh_rate = 0           # 0 = максимальна частота монітора, або точне число, напр. 240
-poll_interval_ms = 1000    # як часто перевіряти, чи запущена гра
-scaling = "stretch"        # "stretch" = розтягнуте 4:3, "center" = з чорними смугами, "driver" = не чіпати
+refresh_rate = 0           # 0 = highest your monitor supports, or an exact value such as 240
+poll_interval_ms = 1000    # how often to check whether the game is running
+scaling = "stretch"        # "stretch" = stretched 4:3, "center" = black bars, "driver" = don't touch
+language = "auto"          # "auto" = Windows language, "uk" = Ukrainian, "en" = English
 ```
 
-Якщо режим не перемикається — подивіться `cs2-res-switcher.log` поруч із програмою: там написано, які частоти монітор підтримує для цієї роздільності.
+If the resolution doesn't switch, open `cs2-res-switcher.log` next to the program. It lists the refresh rates your monitor supports at that resolution.
 
-## Поради, щоб перемикання було швидшим
+## Making the switch faster
 
-- **NVIDIA:** Панель керування NVIDIA → «Регулювання розміру та положення робочого столу» → режим «На весь екран», «Виконати масштабування на: **ГП**», галочка «Заміщення режиму масштабування, заданого іграми та програмами». Тоді монітор не перелаштовується, і чорний екран майже зникає.
-- **AMD:** Adrenalin → Дисплей → «GPU Scaling: увімкнено», «Scaling Mode: Full panel».
-- Windows 11: Параметри → Система → Дисплей → Графіка → «Оптимізація для віконних ігор» → увімкнути.
+- **NVIDIA:** NVIDIA Control Panel → *Adjust desktop size and position* → scaling mode *Full-screen*, *Perform scaling on: **GPU***, tick *Override the scaling mode set by games and programs*. The monitor then keeps its native signal and the black screen almost disappears.
+- **AMD:** Adrenalin → Display → *GPU Scaling: On*, *Scaling Mode: Full panel*.
+- **Windows 11:** Settings → System → Display → Graphics → *Optimizations for windowed games* → On.
 
-## Як це працює
+## How it works
 
-- Основний монітор визначається через `EnumDisplayDevicesW` (`DISPLAY_DEVICE_PRIMARY_DEVICE`).
-- Поточний режим зберігається через `EnumDisplaySettingsW(ENUM_CURRENT_SETTINGS)` і відновлюється точно таким самим.
-- Перемикання через `ChangeDisplaySettingsExW` з прапором `0`: зміна тимчасова й не пишеться в реєстр, тож навіть після аварійного завершення перезавантаження повертає звичайну роздільність.
-- Процес гри перевіряється через `sysinfo` раз на секунду: навантаження на CPU практично нульове.
+- The primary monitor is found with `EnumDisplayDevicesW` (`DISPLAY_DEVICE_PRIMARY_DEVICE`).
+- The current mode is saved with `EnumDisplaySettingsW(ENUM_CURRENT_SETTINGS)` and restored exactly.
+- The switch uses `ChangeDisplaySettingsExW` with flag `0`. The change is temporary and is never written to the registry, so even after a crash a reboot brings back your normal resolution.
+- The game process is checked with `sysinfo` once per second, so CPU usage stays practically at zero.
+- The app collects no data and makes no network connections.
 
-## Збірка з коду
+## Building from source
 
-Потрібні [Rust](https://rustup.rs) і, для інсталятора, [Inno Setup 6](https://jrsoftware.org/isinfo.php).
+You need [Rust](https://rustup.rs). For the installer you also need [Inno Setup 6](https://jrsoftware.org/isinfo.php).
 
 ```bash
 cargo build --release
@@ -64,8 +74,8 @@ cargo build --release
 powershell -ExecutionPolicy Bypass -File build-installer.ps1
 ```
 
-Інсталятор з'явиться в папці `dist`.
+The installer appears in the `dist` folder.
 
-## Ліцензія
+## License
 
 MIT

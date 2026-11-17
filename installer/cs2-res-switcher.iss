@@ -1,4 +1,4 @@
-; Inno Setup script for cs2-res-switcher.
+﻿; Inno Setup script for cs2-res-switcher.
 ; Build: powershell -File build-installer.ps1   (needs Inno Setup 6)
 
 #define AppName "cs2-res-switcher"
@@ -34,9 +34,14 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "ukrainian"; MessagesFile: "compiler:Languages\Ukrainian.isl"
 Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
 
+[CustomMessages]
+english.AutoStart=Start with Windows
+ukrainian.AutoStart=Запускати разом з Windows
+russian.AutoStart=Запускать вместе с Windows
+
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
-Name: "autostart"; Description: "Start with Windows / Запускати разом з Windows"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+Name: "autostart"; Description: "{cm:AutoStart}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
 Source: "..\dist\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
@@ -49,8 +54,19 @@ Name: "{userdesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app
 Name: "{userstartup}\{#AppName}"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; Tasks: autostart
 
 [Run]
+; Store the language picked in setup as the app's UI language.
+Filename: "{app}\{#AppExe}"; Parameters: "--set-language {code:AppLang} --exit"; WorkingDir: "{app}"; Flags: runhidden waituntilterminated
 Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
 Type: files; Name: "{app}\config.toml"
 Type: files; Name: "{app}\cs2-res-switcher.log"
+
+[Code]
+function AppLang(Param: String): String;
+begin
+  if ActiveLanguage = 'ukrainian' then
+    Result := 'uk'
+  else
+    Result := 'en';
+end;

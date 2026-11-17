@@ -5,17 +5,19 @@
 
 mod config;
 mod display;
+mod i18n;
 mod logger;
 mod tray;
 
 use config::Config;
 use display::Switcher;
+use i18n::{Lang, Language, Msg, Status};
 use std::ffi::OsString;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System};
 use tray::{Action, IconState, Tray};
-use windows::core::{w, BOOL};
+use windows::core::{w, BOOL, HSTRING};
 use windows::Win32::Foundation::{GetLastError, ERROR_ALREADY_EXISTS, LPARAM, WPARAM};
 use windows::Win32::System::Console::SetConsoleCtrlHandler;
 use windows::Win32::System::Threading::{CreateMutexW, GetCurrentThreadId};
@@ -52,6 +54,7 @@ struct App {
     tray: Tray,
     mode: Mode,
     paused: bool,
+    lang: Lang,
 }
 
 impl App {
@@ -142,6 +145,16 @@ impl App {
                     }
                 }
             }
+            Action::SetLanguage(lang) => {
+                log_info!("Language set to {lang:?}");
+                self.lang = lang;
+                self.cfg.language = Language::from(lang);
+                if let Err(e) = config::save(&self.cfg) {
+                    log_error!("Could not save config: {e}");
+                }
+                self.tray.set_language(lang);
+                self.refresh_tray();
+            }
             Action::Quit => {
                 log_info!("Exit requested");
                 self.restore();
@@ -158,14 +171,18 @@ impl App {
 
     fn refresh_tray(&mut self) {
         let switched = self.switcher.is_switched();
-        let status = match (self.paused, self.mode) {
-            (true, _) if switched => "Paused (manual mode)".to_string(),
-            (true, _) => "Paused".to_string(),
-            (false, Mode::Auto) => format!("Active: {}", self.cfg.process_name),
-            (false, Mode::Manual) => "Active: manual".to_string(),
-            (false, Mode::Suppressed) => format!("Idle ({} running)", self.cfg.process_name),
-            (false, Mode::Idle) => "Idle".to_string(),
-        };
+        let game = self.cfg.process_name.as_str();
+        let status = i18n::status(
+            self.lang,
+            match (self.paused, self.mode) {
+                (true, _) if switched => Status::PausedManual,
+                (true, _) => Status::Paused,
+                (false, Mode::Auto) => Status::Active(game),
+                (false, Mode::Manual) => Status::ActiveManual,
+                (false, Mode::Suppressed) => Status::GameRunning(game),
+                (false, Mode::Idle) => Status::Idle,
+            },
+        );
         let state = if switched {
             IconState::Active
         } else if self.paused {
@@ -199,13 +216,38 @@ fn already_running() -> bool {
 fn main() {
     logger::init();
 
+    let (mut cfg, warning) = config::load();
+
+    // `--set-language uk|en|auto` (used by the installer) updates the config.
+    let args: Vec<String> = std::env::args().collect();
+    if let Some(code) = args
+        .iter()
+        .position(|a| a == "--set-language")
+        .and_then(|i| args.get(i + 1))
+    {
+        match Language::parse(code) {
+            Some(language) => {
+                cfg.language = language;
+                if let Err(e) = config::save(&cfg) {
+                    log_error!("Could not save config: {e}");
+                }
+            }
+            None => log_error!("Unknown language '{code}'"),
+        }
+    }
+    let lang = cfg.language.resolve();
+    // `--exit`: only apply command-line settings, don't start (installer use).
+    if args.iter().any(|a| a == "--exit") {
+        return;
+    }
+
     if already_running() {
         log_info!("Another instance is already running, exiting");
-        // SAFETY: simple modal message box with static strings.
+        // SAFETY: simple modal message box with valid wide strings.
         unsafe {
             MessageBoxW(
                 None,
-                w!("cs2-res-switcher вже запущено (дивіться іконку в треї)."),
+                &HSTRING::from(i18n::tr(lang, Msg::AlreadyRunning)),
                 w!("cs2-res-switcher"),
                 MB_OK | MB_ICONINFORMATION,
             );
@@ -213,7 +255,6 @@ fn main() {
         return;
     }
 
-    let (cfg, warning) = config::load();
     log_info!(
         "Started. Watching {} -> {}x{} @ {} Hz, poll {} ms",
         cfg.process_name,
@@ -222,11 +263,12 @@ fn main() {
         cfg.refresh_rate,
         cfg.poll_interval_ms
     );
+    log_info!("Language: {:?} -> {lang:?}", cfg.language);
     if let Some(w) = warning {
         log_info!("{w}");
     }
 
-    let tray = match Tray::new() {
+    let tray = match Tray::new(lang) {
         Ok(t) => t,
         Err(e) => {
             log_error!("Cannot create tray icon: {e}");
@@ -257,6 +299,7 @@ fn main() {
         tray,
         mode: Mode::Idle,
         paused: false,
+        lang,
     };
     app.tick();
     let mut last_poll = Instant::now();

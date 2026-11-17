@@ -1,6 +1,7 @@
 //! System tray icon and context menu.
 
-use tray_icon::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
+use crate::i18n::{tr, Lang, Msg};
+use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -14,24 +15,36 @@ pub enum IconState {
 pub enum Action {
     TogglePause,
     ManualSwitch,
+    SetLanguage(Lang),
     Quit,
 }
 
 pub struct Tray {
     icon: TrayIcon,
+    lang: Lang,
     status: MenuItem,
     pause: MenuItem,
     manual: MenuItem,
+    lang_uk: CheckMenuItem,
+    lang_en: CheckMenuItem,
     quit: MenuItem,
     state: Option<IconState>,
 }
 
 impl Tray {
-    pub fn new() -> Result<Self, String> {
-        let status = MenuItem::new("Idle", false, None);
-        let pause = MenuItem::new("Пауза", true, None);
-        let manual = MenuItem::new("Перемкнути вручну", true, None);
-        let quit = MenuItem::new("Вихід", true, None);
+    pub fn new(lang: Lang) -> Result<Self, String> {
+        let status = MenuItem::new("", false, None);
+        let pause = MenuItem::new(tr(lang, Msg::Pause), true, None);
+        let manual = MenuItem::new(tr(lang, Msg::ManualSwitch), true, None);
+        let quit = MenuItem::new(tr(lang, Msg::Quit), true, None);
+
+        // Language names are shown in their own language so anyone can find them.
+        let lang_uk = CheckMenuItem::new("Українська", true, lang == Lang::Uk, None);
+        let lang_en = CheckMenuItem::new("English", true, lang == Lang::En, None);
+        let lang_menu = Submenu::new("Мова / Language", true);
+        lang_menu
+            .append_items(&[&lang_uk, &lang_en])
+            .map_err(|e| format!("tray menu: {e}"))?;
 
         let menu = Menu::new();
         menu.append_items(&[
@@ -39,6 +52,7 @@ impl Tray {
             &PredefinedMenuItem::separator(),
             &pause,
             &manual,
+            &lang_menu,
             &PredefinedMenuItem::separator(),
             &quit,
         ])
@@ -46,30 +60,45 @@ impl Tray {
 
         let icon = TrayIconBuilder::new()
             .with_menu(Box::new(menu))
-            .with_tooltip("cs2-res-switcher: Idle")
+            .with_tooltip("cs2-res-switcher")
             .with_icon(make_icon(IconState::Idle)?)
             .build()
             .map_err(|e| format!("tray icon: {e}"))?;
 
         Ok(Self {
             icon,
+            lang,
             status,
             pause,
             manual,
+            lang_uk,
+            lang_en,
             quit,
             state: Some(IconState::Idle),
         })
     }
 
-    /// Update status text, tooltip, pause label and icon colour.
+    pub fn set_language(&mut self, lang: Lang) {
+        self.lang = lang;
+        self.quit.set_text(tr(lang, Msg::Quit));
+        self.lang_uk.set_checked(lang == Lang::Uk);
+        self.lang_en.set_checked(lang == Lang::En);
+    }
+
+    /// Update status text, tooltip, menu labels and icon colour.
     pub fn update(&mut self, status: &str, state: IconState, paused: bool, switched: bool) {
+        let lang = self.lang;
         self.status.set_text(status);
-        self.pause.set_text(if paused { "Відновити" } else { "Пауза" });
-        self.manual.set_text(if switched {
-            "Повернути робочий стіл"
-        } else {
-            "Перемкнути вручну"
-        });
+        self.pause
+            .set_text(tr(lang, if paused { Msg::Resume } else { Msg::Pause }));
+        self.manual.set_text(tr(
+            lang,
+            if switched {
+                Msg::ManualRestore
+            } else {
+                Msg::ManualSwitch
+            },
+        ));
         let _ = self
             .icon
             .set_tooltip(Some(format!("cs2-res-switcher: {status}")));
@@ -91,6 +120,12 @@ impl Tray {
             }
             if id == self.manual.id() {
                 return Some(Action::ManualSwitch);
+            }
+            if id == self.lang_uk.id() {
+                return Some(Action::SetLanguage(Lang::Uk));
+            }
+            if id == self.lang_en.id() {
+                return Some(Action::SetLanguage(Lang::En));
             }
             if id == self.quit.id() {
                 return Some(Action::Quit);
