@@ -1,0 +1,30 @@
+[package]
+name = "cs2-res-switcher"
+version = "1.0.0"
+edition = "2021"
+description = "Auto-switch primary monitor resolution while CS2 (or any game) is running"
+license = "MIT"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+toml = "1"
+sysinfo = { version = "0.40", default-features = false, features = ["system"] }
+tray-icon = "0.26"
+
+[dependencies.windows]
+version = "0.62"
+features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_System_Console",
+    "Win32_System_SystemInformation",
+    "Win32_System_Threading",
+    "Win32_UI_WindowsAndMessaging",
+]
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+panic = "unwind"
